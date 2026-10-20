@@ -208,7 +208,12 @@ impl<T: SequenceAlloc + Clone> From<&[T]> for Sequence<T> {
 
 impl<T: SequenceAlloc> From<Vec<T>> for Sequence<T> {
     fn from(v: Vec<T>) -> Self {
-        Sequence::from_iter(v)
+        // The exact length avoids extend's per-element capacity checks.
+        let mut seq = Sequence::new(v.len());
+        for (slot, elem) in seq.iter_mut().zip(v) {
+            *slot = elem;
+        }
+        seq
     }
 }
 
@@ -850,5 +855,32 @@ mod tests {
             let ys: Vec<u8> = seq.into();
             xs == ys
         }
+    }
+
+    quickcheck! {
+        fn test_from_vec_primitive_quickcheck(xs: Vec<u8>) -> bool {
+            let seq: Sequence<u8> = xs.clone().into();
+            seq.as_slice() == xs.as_slice()
+        }
+    }
+
+    quickcheck! {
+        fn test_from_vec_string_quickcheck(xs: Vec<crate::String>) -> bool {
+            let seq: Sequence<crate::String> = xs.clone().into();
+            seq.as_slice() == xs.as_slice()
+        }
+    }
+
+    #[test]
+    fn test_from_vec_f32() {
+        let values = vec![f32::NEG_INFINITY, -0.0, 0.0, 1.5, f32::INFINITY, f32::NAN];
+        let expected: Vec<_> = values.iter().map(|v| v.to_bits()).collect();
+        let seq: Sequence<f32> = values.into();
+        assert_eq!(
+            seq.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            expected
+        );
+        assert!(Sequence::<f32>::from(Vec::new()).is_empty());
+        assert!(Sequence::<crate::String>::from(Vec::new()).is_empty());
     }
 }
